@@ -6,7 +6,7 @@ def load_and_binarize(path):
     img = Image.open(path).convert("L")
     arr = np.array(img, dtype=np.float32) / 255.0
     binary = (arr <= 0.4).astype(np.uint8)
-    return binary
+    return binary, img
 
 def find_objects(binary):
     h, w = binary.shape
@@ -39,9 +39,10 @@ def preprocess_crop(binary, bbox):
     arr = np.array(img, dtype=np.float32) / 255.0
     return arr.flatten()[None, :]
 
-def draw_objects(binary, objects, net, out_path):
-    img = Image.fromarray((1 - binary) * 255).convert("RGB")
+def draw_objects(binary, objects, net, orig_img, out_path):
+    img = orig_img.convert("RGB")
     draw = ImageDraw.Draw(img)
+
     for obj in objects:
         xs = [p[0] for p in obj]
         ys = [p[1] for p in obj]
@@ -69,14 +70,19 @@ def draw_objects(binary, objects, net, out_path):
         cls = np.argmax(probs)
         prob = probs[cls]
 
+        if prob >= 0.98:
+            label = f"{cls} ({prob:.2f})"
+        else:
+            label = f"unknown ({prob:.2f})"
+
         draw.rectangle([x_min_sq, y_min_sq, x_max_sq, y_max_sq], outline="red", width=2)
-        draw.text((x_min_sq, y_min_sq-12), f"{cls} ({prob:.2f})", fill="red")
+        draw.text((x_min_sq, y_min_sq-12), label, fill="red")
 
     img.save(out_path)
     print(f"Сохранено: {out_path}")
 
 if __name__ == "__main__":
     net = Net.load("model.json")
-    binary = load_and_binarize("input.png")
+    binary, orig_img = load_and_binarize("input.png")
     objects = find_objects(binary)
-    draw_objects(binary, objects, net, "output.png")
+    draw_objects(binary, objects, net, orig_img, "output.png")
