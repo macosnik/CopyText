@@ -1,0 +1,21 @@
+# Кеши Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Виртуальное окружение
+venv/
+.env/
+
+# Логи и временные файлы
+*.log
+*.tmp
+
+# Сборка и дистрибутивы
+build/
+dist/
+*.egg-info/
+
+# Настройки IDE
+.idea/
+.vscode/
