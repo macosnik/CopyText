@@ -43,7 +43,7 @@ def save_image():
     y_off, x_off = (side - h) // 2, (side - w) // 2
     square[y_off:y_off+h, x_off:x_off+w] = cropped
     img = Image.fromarray(square).resize((28, 28), Image.LANCZOS)
-    arr = (np.array(img, dtype=np.float32) / 255.0 > 0.5).astype(np.float32)
+    arr = (np.array(img, dtype=np.float32) / 255.0 > 0.5).astype(int)
     with open("dataset.csv", "a", newline="") as f:
         csv.writer(f).writerow(arr.flatten().tolist() + [current_symbol])
     canvas.fill((0, 0, 0))
