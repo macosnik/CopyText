@@ -20,6 +20,6 @@ net.train(X, y, 1000, 0.01)
 net.save("model.json")
 
 nn = Net.load("model.json")
-preds, y_true = nn.predict(X[:100]), y[:100]
+preds, y_true = nn.predict(X), y
 
 print(f"Верно: {(preds == y_true).sum()}/{len(y_true)}")
