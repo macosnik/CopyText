@@ -34,7 +34,7 @@ def find_objects(binary):
 def preprocess_crop(binary, bbox):
     x_min, y_min, x_max, y_max = bbox
     crop = binary[y_min:y_max+1, x_min:x_max+1]
-    img = Image.fromarray((1 - crop) * 255).convert("L")
+    img = Image.fromarray(crop * 255).convert("L")
     img = img.resize((28,28), Image.LANCZOS)
     arr = np.array(img, dtype=np.float32) / 255.0
     return arr.flatten()[None, :]
