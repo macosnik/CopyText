@@ -8,7 +8,7 @@ def load_and_binarize(path):
     w, h = img.size
     pixels = list(img.getdata())
     binary = [
-        [1 if pixels[y * w + x] / 255 <= 0.6 else 0 for x in range(w)]
+        [1 if pixels[y * w + x] / 255 <= 0.5 else 0 for x in range(w)]
         for y in range(h)
     ]
     return binary, img
