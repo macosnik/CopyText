@@ -1,6 +1,6 @@
-import os
 from PIL import Image, ImageDraw
 from model import Net
+import os
 
 
 def load_and_binarize(path):
