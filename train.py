@@ -40,8 +40,8 @@ if __name__ == "__main__":
 
         X_shuf, y_shuf = shuffle_dataset(X_filtered, y_filtered)
 
-        net = Net([len(X[0]), 10, 5, 2])
-        net.train(X_shuf, y_shuf, epochs=10000, lr=0.1)
+        net = Net([len(X[0]), 3, 2])
+        net.train(X_shuf, y_shuf, epochs=10000, lr=0.01)
 
         path = os.path.join("models", f"model_{cls}.json")
         net.save(path)
