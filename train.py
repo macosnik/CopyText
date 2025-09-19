@@ -33,7 +33,6 @@ if __name__ == "__main__":
                 X_filtered.append(xi)
                 y_filtered.append(1)
             else:
-                # исключаем разновидности той же группы
                 if yi.split("-")[0] != base:
                     X_filtered.append(xi)
                     y_filtered.append(0)
