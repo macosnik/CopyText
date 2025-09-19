@@ -16,7 +16,7 @@ X, y_raw = load_dataset("dataset.csv")
 y, classes = encode_labels(y_raw)
 
 net = Net([X.shape[1], 5, 5, len(classes)])
-net.train(X, y, 1000, 0.01)
+net.train(X, y, 10000, 0.01)
 net.save("model.json")
 
 nn = Net.load("model.json")
