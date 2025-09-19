@@ -1,25 +1,35 @@
 import csv
-import numpy as np
 
 FILE = 'dataset.csv'
-SIZE = 28
+SIZE = 20
 
 def clean(file, thr=0.0):
     with open(file) as f:
-        data = list(csv.reader(f))
-    data = [r for r in data if not np.all(np.array(r[:-1], float) <= thr)]
+        reader = csv.reader(f)
+        header = next(reader, None)
+        data = list(reader)
+    new_data = []
+    for r in data:
+        values = [float(x) for x in r[:-1]]
+        if not all(v <= thr for v in values):
+            new_data.append(r)
     with open(file, 'w', newline='') as f:
-        csv.writer(f).writerows(data)
+        writer = csv.writer(f)
+        if header:
+            writer.writerow(header)
+        writer.writerows(new_data)
 
 def block(v):
-    g = int(v * 23) + 232
+    g = int(float(v) * 23) + 232
     return f"\033[48;5;{g}m   \033[0m"
 
 if __name__ == "__main__":
     clean(FILE)
 
     with open(FILE) as f:
-        data = list(csv.reader(f))
+        reader = csv.reader(f)
+        header = next(reader, None)
+        data = list(reader)
 
     labels = sorted({row[-1] for row in data})
     print("Доступные метки:")
@@ -34,18 +44,22 @@ if __name__ == "__main__":
         exit()
 
     del_idx = []
-    for i, row in items:
-        px = np.array(row[:-1], float).reshape(SIZE, SIZE)
-        print(f"\nИзображение {i+1}, метка: {row[-1]}")
+    for local_idx, (global_idx, row) in enumerate(items, start=1):
+        values = [float(x) for x in row[:-1]]
+        px = [values[j:j+SIZE] for j in range(0, len(values), SIZE)]
+        print(f"\nИзображение {local_idx}, метка: {row[-1]}")
         for y in px:
             print(''.join(block(p) for p in y))
         if input("Enter — дальше, 'delete' — удалить: ").strip().lower() == "delete":
-            del_idx.append(i)
+            del_idx.append(global_idx)
 
     if del_idx:
         data = [r for j, r in enumerate(data) if j not in del_idx]
         with open(FILE, 'w', newline='') as f:
-            csv.writer(f).writerows(data)
+            writer = csv.writer(f)
+            if header:
+                writer.writerow(header)
+            writer.writerows(data)
         print(f"Удалено {len(del_idx)} примеров.")
 
     print("Готово.")
