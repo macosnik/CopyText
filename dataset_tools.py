@@ -6,10 +6,10 @@ SIZE = 28
 
 def clean(file, thr=0.0):
     with open(file) as f:
-        h, *d = csv.reader(f)
-    d = [r for r in d if not np.all(np.array(r[:-1], float) <= thr)]
+        data = list(csv.reader(f))
+    data = [r for r in data if not np.all(np.array(r[:-1], float) <= thr)]
     with open(file, 'w', newline='') as f:
-        csv.writer(f).writerows([h] + d)
+        csv.writer(f).writerows(data)
 
 def block(v):
     g = int(v * 23) + 232
@@ -18,13 +18,12 @@ def block(v):
 clean(FILE)
 
 with open(FILE) as f:
-    r = list(csv.reader(f))
-    head, data = r[0], r[1:]
+    data = list(csv.reader(f))
 
 labels = sorted({row[-1] for row in data})
 print("Доступные метки:")
 for l in labels:
-    print(f"- {l} ({sum(row[-1]==l for row in data)})")
+    print(f"- {l} ({sum(row[-1] == l for row in data)})")
 
 choice = input("\nВведите имя метки: ").strip()
 items = [(i, row) for i, row in enumerate(data) if row[-1] == choice]
@@ -36,7 +35,7 @@ if not items:
 del_idx = []
 for i, row in items:
     px = np.array(row[:-1], float).reshape(SIZE, SIZE)
-    print(f"\n\033Изображение {i+1}, метка: {row[-1]}")
+    print(f"\nИзображение {i+1}, метка: {row[-1]}")
     for y in px:
         print(''.join(block(p) for p in y))
     if input("Enter — дальше, 'delete' — удалить: ").strip().lower() == "delete":
@@ -45,7 +44,7 @@ for i, row in items:
 if del_idx:
     data = [r for j, r in enumerate(data) if j not in del_idx]
     with open(FILE, 'w', newline='') as f:
-        csv.writer(f).writerows([head] + data)
+        csv.writer(f).writerows(data)
     print(f"Удалено {len(del_idx)} примеров.")
 
 print("Готово.")

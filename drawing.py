@@ -19,10 +19,21 @@ canvas.fill((0, 0, 0))
 
 font = pygame.font.SysFont("Arial", 20)
 
+dataset_file = "dataset.csv"
+label_counts = {s: 0 for s in symbols}
+with open(dataset_file, "r", newline="") as f:
+    reader = csv.reader(f)
+    for row in reader:
+        if row:
+            label = row[-1]
+            if label in label_counts:
+                label_counts[label] += 1
+
 def draw_ui():
     screen.fill((50, 50, 50))
     screen.blit(canvas, (0, 30))
-    text = f"Символ: {current_symbol or 'не выбран'} | Толщина: {radius}"
+    count = label_counts.get(current_symbol, 0) if current_symbol else 0
+    text = f"Символ: {current_symbol or 'не выбран'} | Толщина: {radius} | Меток: {count}"
     label = font.render(text, True, (255, 255, 255))
     screen.blit(label, (10, 5))
 
@@ -44,8 +55,9 @@ def save_image():
     square[y_off:y_off+h, x_off:x_off+w] = cropped
     img = Image.fromarray(square).resize((28, 28), Image.LANCZOS)
     arr = (np.array(img, dtype=np.float32) / 255.0 > 0.5).astype(int)
-    with open("dataset.csv", "a", newline="") as f:
+    with open(dataset_file, "a", newline="") as f:
         csv.writer(f).writerow(arr.flatten().tolist() + [current_symbol])
+    label_counts[current_symbol] += 1
     canvas.fill((0, 0, 0))
 
 running, drawing = True, False
