@@ -28,7 +28,7 @@ if __name__ == "__main__":
         y = [1 if label == cls else 0 for label in y_raw]
         X_shuf, y_shuf = shuffle_dataset(X, y)
 
-        net = Net([len(X[0]), 3, 2])
+        net = Net([len(X[0]), 5, 3, 2])
         net.train(X_shuf, y_shuf, epochs=10000, lr=0.01)
 
         path = os.path.join("models", f"model_{cls}.json")
