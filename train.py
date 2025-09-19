@@ -22,14 +22,26 @@ if __name__ == "__main__":
     classes = sorted(set(y_raw))
 
     os.makedirs("models", exist_ok=True)
-    [os.remove(f"models/{f}") for f in os.listdir("models")]
+    [os.remove(os.path.join("models", f)) for f in os.listdir("models")]
 
     for cls in classes:
-        y = [1 if label == cls else 0 for label in y_raw]
-        X_shuf, y_shuf = shuffle_dataset(X, y)
+        base = cls.split("-")[0]  # базовая группа
+        X_filtered, y_filtered = [], []
 
-        net = Net([len(X[0]), 5, 3, 2])
-        net.train(X_shuf, y_shuf, epochs=10000, lr=0.01)
+        for xi, yi in zip(X, y_raw):
+            if yi == cls:
+                X_filtered.append(xi)
+                y_filtered.append(1)
+            else:
+                # исключаем разновидности той же группы
+                if yi.split("-")[0] != base:
+                    X_filtered.append(xi)
+                    y_filtered.append(0)
+
+        X_shuf, y_shuf = shuffle_dataset(X_filtered, y_filtered)
+
+        net = Net([len(X[0]), 10, 5, 2])
+        net.train(X_shuf, y_shuf, epochs=10000, lr=0.1)
 
         path = os.path.join("models", f"model_{cls}.json")
         net.save(path)
@@ -41,3 +53,4 @@ if __name__ == "__main__":
         correct = sum(1 for p, v in zip(preds, y_shuf) if p == 1 and v == 1)
 
         print(f"\nВерно для '{cls}': {correct}/{total}\n")
+
