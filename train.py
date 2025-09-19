@@ -12,14 +12,15 @@ def encode_labels(y):
     mapping = {c: i for i, c in enumerate(classes)}
     return np.array([mapping[c] for c in y], int), classes
 
-X, y_raw = load_dataset("dataset.csv")
-y, classes = encode_labels(y_raw)
+if __name__ == "__main__":
+    X, y_raw = load_dataset("dataset.csv")
+    y, classes = encode_labels(y_raw)
 
-net = Net([X.shape[1], 5, 5, len(classes)])
-net.train(X, y, 10000, 0.01)
-net.save("model.json")
+    net = Net([X.shape[1], 6, 6, len(classes)])
+    net.train(X, y, 10000, 0.01)
+    net.save("model.json")
 
-nn = Net.load("model.json")
-preds, y_true = nn.predict(X), y
+    nn = Net.load("model.json")
+    preds, y_true = nn.predict(X), y
 
-print(f"Верно: {(preds == y_true).sum()}/{len(y_true)}")
+    print(f"Верно: {(preds == y_true).sum()}/{len(y_true)}")
