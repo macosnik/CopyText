@@ -1,24 +1,19 @@
 import numpy as np
 import json
 
-
 def relu(x):
     return np.maximum(0, x)
 
-
 def relu_deriv(x):
     return (x > 0).astype(float)
-
 
 def softmax(x):
     e = np.exp(x - np.max(x, axis=1, keepdims=True))
     return e / e.sum(axis=1, keepdims=True)
 
-
 def loss(y, p):
     y = np.array(y, dtype=int)
     return -np.log(p[np.arange(len(y)), y]).mean()
-
 
 class Net:
     def __init__(self, layers):

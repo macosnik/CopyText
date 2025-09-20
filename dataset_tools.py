@@ -61,5 +61,3 @@ if __name__ == "__main__":
                 writer.writerow(header)
             writer.writerows(data)
         print(f"Удалено {len(del_idx)} примеров.")
-
-    print("Готово.")
