@@ -92,7 +92,6 @@ def draw_objects(binary, objs, models, out_path):
             if best_prob >= 0.9
             else f"unknown ({best_prob:.2f})"
         )
-        print(text)
 
         draw.rectangle([x0, y0, x1, y1], outline="red", width=1)
         draw.text((x0, y0 - 12), text, fill="red")
@@ -103,6 +102,6 @@ def draw_objects(binary, objs, models, out_path):
 
 if __name__ == "__main__":
     models = load_models("models")
-    binary, _ = load_and_binarize("test_1.png")
+    binary, _ = load_and_binarize("test_2.png")
     objs = find_objects(binary)
     draw_objects(binary, objs, models, "output.png")
