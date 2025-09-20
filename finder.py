@@ -8,7 +8,7 @@ def load_and_binarize(path):
     w, h = img.size
     pixels = list(img.getdata())
     binary = [
-        [1 if pixels[y * w + x] / 255 <= 0.5 else 0 for x in range(w)]
+        [1 if pixels[y * w + x] / 255 <= 0.4 else 0 for x in range(w)]
         for y in range(h)
     ]
     return binary, img
@@ -88,9 +88,11 @@ def draw_objects(binary, objs, models, out_path):
 
         text = (
             f"{best_label} ({best_prob:.2f})"
+            # f"{best_label}"
             if best_prob >= 0.9
             else f"unknown ({best_prob:.2f})"
         )
+        print(text)
 
         draw.rectangle([x0, y0, x1, y1], outline="red", width=1)
         draw.text((x0, y0 - 12), text, fill="red")
@@ -101,6 +103,6 @@ def draw_objects(binary, objs, models, out_path):
 
 if __name__ == "__main__":
     models = load_models("models")
-    binary, _ = load_and_binarize("input.png")
+    binary, _ = load_and_binarize("test_1.png")
     objs = find_objects(binary)
     draw_objects(binary, objs, models, "output.png")
