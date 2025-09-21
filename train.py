@@ -1,5 +1,7 @@
+import os, csv, random
+from collections import defaultdict
 from model import Net
-import csv, random, os
+
 
 def load_dataset(path):
     with open(path, "r") as f:
@@ -10,46 +12,69 @@ def load_dataset(path):
     y = [row[-1] for row in data]
     return X, y
 
+
 def shuffle_dataset(X, y):
     idx = list(range(len(y)))
     random.shuffle(idx)
-    X_shuf = [X[i] for i in idx]
-    y_shuf = [y[i] for i in idx]
-    return X_shuf, y_shuf
+    return [X[i] for i in idx], [y[i] for i in idx]
+
 
 if __name__ == "__main__":
     X, y_raw = load_dataset("dataset.csv")
     classes = sorted(set(y_raw))
 
     os.makedirs("models", exist_ok=True)
-    [os.remove(os.path.join("models", f)) for f in os.listdir("models")]
+    for f in os.listdir("models"):
+        os.remove(os.path.join("models", f))
+
+    by_class = defaultdict(list)
+    for i, yi in enumerate(y_raw):
+        by_class[yi].append(i)
 
     for cls in classes:
         base = cls.split("-")[0]
-        X_filtered, y_filtered = [], []
+        pos_idx = by_class[cls]
+        neg_idx = [i for i, yi in enumerate(y_raw) if yi.split("-")[0] != base]
 
-        for xi, yi in zip(X, y_raw):
-            if yi == cls:
-                X_filtered.append(xi)
-                y_filtered.append(1)
-            else:
-                if yi.split("-")[0] != base:
-                    X_filtered.append(xi)
-                    y_filtered.append(0)
+        neg_by_class = defaultdict(list)
+        for i in neg_idx:
+            neg_by_class[y_raw[i]].append(i)
 
-        X_shuf, y_shuf = shuffle_dataset(X_filtered, y_filtered)
+        per_class = max(1, 1000 // len(neg_by_class))
+        neg_sample = []
+        for idxs in neg_by_class.values():
+            random.shuffle(idxs)
+            neg_sample.extend(idxs[:per_class])
+
+        idx_stage1 = pos_idx + neg_sample
+        X1 = [X[i] for i in idx_stage1]
+        y1 = [1 if y_raw[i] == cls else 0 for i in idx_stage1]
+        X1, y1 = shuffle_dataset(X1, y1)
 
         net = Net([len(X[0]), 5, 2])
-        net.train(X_shuf, y_shuf, epochs=1000, lr=0.1)
+        net.train(X1, y1, epochs=1000, lr=0.1)
+        print()
+
+        idx_stage2 = pos_idx + neg_idx
+        X2 = [X[i] for i in idx_stage2]
+        y2 = [1 if y_raw[i] == cls else 0 for i in idx_stage2]
+        X2, y2 = shuffle_dataset(X2, y2)
+
+        net.train(X2, y2, epochs=2000, lr=0.1)
 
         path = os.path.join("models", f"model_{cls}.json")
         net.save(path)
 
         nn = Net.load(path)
-        preds = nn.predict(X_shuf)
+        preds = nn.predict(X2)
 
-        total = sum(1 for v in y_shuf if v == 1)
-        correct = sum(1 for p, v in zip(preds, y_shuf) if p == 1 and v == 1)
+        total_pos = sum(1 for v in y2 if v == 1)
+        correct_pos = sum(1 for p, v in zip(preds, y2) if p == 1 and v == 1)
 
-        print(f"\nВерно для '{cls}': {correct}/{total}\n")
+        total_neg = sum(1 for v in y2 if v == 0)
+        correct_neg = sum(1 for p, v in zip(preds, y2) if p == 0 and v == 0)
+
+        print(f"\nВерно для '{cls}':")
+        print(f"  Положительные: {correct_pos}/{total_pos}")
+        print(f"  Ложные (отрицательные): {correct_neg}/{total_neg}\n")
 
