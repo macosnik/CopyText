@@ -89,9 +89,11 @@ def draw_objects(binary, objs, models, out_path):
         text = (
             f"{best_label} ({best_prob:.2f})"
             # f"{best_label}"
-            if best_prob >= 0.9
+            if best_prob >= 0.8
             else f"unknown ({best_prob:.2f})"
         )
+
+        print(text)
 
         draw.rectangle([x0, y0, x1, y1], outline="red", width=1)
         draw.text((x0, y0 - 12), text, fill="red")

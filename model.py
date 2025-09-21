@@ -68,7 +68,7 @@ class Net:
             l = loss(y, acts[-1])
             gw, gb = self.backward(acts, zs, y)
             self.update(gw, gb, lr)
-            print(f"\rEpoch {e}/{epochs} - Loss: {l:.4f}", end="")
+            print(f"\rEpoch {e}/{epochs} - Loss: {l:.3g}", end="")
 
     def predict(self, x):
         x = np.array(x, float)
