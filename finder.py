@@ -89,7 +89,7 @@ def draw_objects(binary, objs, models, out_path):
         text = (
             f"{best_label} ({best_prob:.2f})"
             # f"{best_label}"
-            if best_prob >= 0.8
+            if best_prob >= 0.90
             else f"unknown ({best_prob:.2f})"
         )
 

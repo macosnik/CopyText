@@ -60,7 +60,7 @@ if __name__ == "__main__":
         y2 = [1 if y_raw[i] == cls else 0 for i in idx_stage2]
         X2, y2 = shuffle_dataset(X2, y2)
 
-        net.train(X2, y2, epochs=2000, lr=0.1)
+        net.train(X2, y2, epochs=10000, lr=0.05)
 
         path = os.path.join("models", f"model_{cls}.json")
         net.save(path)
