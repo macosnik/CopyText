@@ -1,4 +1,4 @@
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from model import Net
 import os
 
@@ -57,12 +57,13 @@ def load_models(path="models"):
         if f.endswith(".json")
     }
 
-
 def draw_objects(binary, objs, models, out_path):
     h, w = len(binary), len(binary[0])
     img = Image.new("RGB", (w, h))
     img.putdata([(v * 255, v * 255, v * 255) for row in binary for v in row])
     draw = ImageDraw.Draw(img)
+
+    font = ImageFont.truetype("fonts/Arialroundedmthelvetica.ttf", size=20)
 
     for obj in objs:
         xs, ys = [p[0] for p in obj], [p[1] for p in obj]
@@ -86,24 +87,84 @@ def draw_objects(binary, objs, models, out_path):
             if prob > best_prob:
                 best_prob, best_label = prob, lbl
 
-        text = (
-            f"{best_label} ({best_prob:.2f})"
-            # f"{best_label}"
-            if best_prob >= 0.90
-            else f"unknown ({best_prob:.2f})"
-        )
-
-        print(text)
+        text = f"{best_label}" if best_prob >= 0.96 else "-"
 
         draw.rectangle([x0, y0, x1, y1], outline="red", width=1)
-        draw.text((x0, y0 - 12), text, fill="red")
+        draw.text((x0, y0 - 20), text, fill="red", font=font)
 
     img.save(out_path)
     print(f"Сохранено: {out_path}")
 
 
+def recognize_text(binary, objs, models, line_gap=15, space_gap_factor=1.5):
+    symbols = []
+    for obj in objs:
+        xs, ys = [p[0] for p in obj], [p[1] for p in obj]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+
+        side = max(x1 - x0 + 1, y1 - y0 + 1)
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        x0, x1 = int(cx - side / 2), int(cx + side / 2)
+        y0, y1 = int(cy - side / 2), int(cy + side / 2)
+
+        vec = preprocess_crop(binary, (x0, y0, x1, y1))
+
+        best_label, best_prob = None, 0
+        for lbl, net in models.items():
+            p = net.predict_proba(vec)[0]
+            prob = p[1] if len(p) == 2 else max(p)
+            if prob > best_prob:
+                best_prob, best_label = prob, lbl
+
+        if best_label is not None and best_prob >= 0.5:
+            symbols.append((best_label, x0, y0, y1, x1 - x0 + 1))
+
+    # сортировка по y, затем по x
+    symbols.sort(key=lambda s: (s[2], s[1]))
+
+    lines, current_line = [], []
+    last_y = None
+    for sym, x, y0, y1, width in symbols:
+        cy = (y0 + y1) // 2
+        if last_y is None or abs(cy - last_y) <= line_gap:
+            current_line.append((x, sym, width))
+            last_y = cy if last_y is None else (last_y + cy) // 2
+        else:
+            # завершить строку
+            current_line.sort(key=lambda s: s[0])
+            lines.append(build_line_with_spaces(current_line, space_gap_factor))
+            current_line = [(x, sym, width)]
+            last_y = cy
+    if current_line:
+        current_line.sort(key=lambda s: s[0])
+        lines.append(build_line_with_spaces(current_line, space_gap_factor))
+
+    return lines
+
+
+def build_line_with_spaces(symbols, space_gap_factor):
+    line = ""
+    for i, (x, sym, width) in enumerate(symbols):
+        if i > 0:
+            prev_x, _, prev_w = symbols[i - 1]
+            gap = x - (prev_x + prev_w)
+            avg_w = (prev_w + width) / 2
+            if gap > avg_w * space_gap_factor:
+                line += " "
+        line += sym
+    return line
+
+
+
 if __name__ == "__main__":
     models = load_models("models")
-    binary, _ = load_and_binarize("test_2.png")
+    binary, _ = load_and_binarize("test_4.png")
     objs = find_objects(binary)
+
+    lines = recognize_text(binary, objs, models)
+    print("Распознанный текст:")
+    for line in lines:
+        print(line)
+
     draw_objects(binary, objs, models, "output.png")
+

@@ -1,5 +1,4 @@
-import csv, json, random, math
-import numpy as np
+import csv, random, math, os
 from PIL import Image, ImageDraw, ImageFont
 
 def draw_digit(char, font, size, bold):
@@ -49,10 +48,12 @@ def crop(img):
     box = img.getbbox()
     return img.crop(box) if box else img
 
-def to_binary(img):
-    arr = np.array(img, dtype=np.float32) / 255.0
-    arr = (arr > 0.5).astype(np.uint8)
-    return Image.fromarray(arr)
+def to_binary_image(img):
+    w, h = img.size
+    data = [255 if p > 127 else 0 for p in img.getdata()]
+    out = Image.new("L", (w, h), 0)
+    out.putdata(data)
+    return out
 
 def fit_to_square(img, size):
     w, h = img.size
@@ -62,54 +63,68 @@ def fit_to_square(img, size):
     nw, nh = max(1, int(round(w * s))), max(1, int(round(h * s)))
     img = img.resize((nw, nh), Image.NEAREST)
     canvas = Image.new("L", (size, size), 0)
-    x = (size - nw) // 2
-    y = (size - nh) // 2
+    x, y = (size - nw) // 2, (size - nh) // 2
     canvas.paste(img, (x, y))
     return canvas
 
-def make_digit(d, font_name, size, bold, sx=0, sy=0, fx=1.0, fy=1.0):
-    work = size * 2
-    font = ImageFont.truetype(font_name, size=work)
-    img = draw_digit(str(d), font, work, bold)
+def make_digit(d, font_name, sx, sy, fx, fy):
+    font = ImageFont.truetype(font_name, 64)
+    img = draw_digit(str(d), font, 64, 0)
     img = shear_x(img, sx)
     img = shear_y(img, sy)
     img = stretch_x(img, fx)
     img = stretch_y(img, fy)
-    img = to_binary(img)
+    img = to_binary_image(img)
     img = crop(img)
-    img = fit_to_square(img, size)
+    img = fit_to_square(img, 20)
     return img
 
-def build_dataset(fonts, out_csv, size, digits, bolds, slant_x, slant_y, scale_x, scale_y):
+def progress_bar(current, total, prefix=""):
+    filled = int(100 * current // total)
+    bar = "█" * filled + " " * (100 - filled)
+    percent = (current / total) * 100
+    print(f"\r\033[31m{prefix} |{bar}| {percent:6.2f}%\033[0m", end="")
+
+def img_to_bits(img):
+    return [1 if p > 127 else 0 for p in img.getdata()]
+
+def build_dataset(fonts, filename, digits, slant_x=None, slant_y=None, scale_x=None, scale_y=None):
+    slant_x, slant_y = [0] if slant_x is None else slant_x, [0] if slant_y is None else slant_y
+    scale_x, scale_y = [1.0] if scale_x is None else scale_x, [1.0] if scale_y is None else scale_y
     rows = []
-    for font in fonts:
-        for d in digits:
-            for b in range(bolds + 1):
-                for sx in slant_x:
-                    for sy in slant_y:
-                        for fx in scale_x:
-                            for fy in scale_y:
-                                try:
-                                    img = make_digit(d, font, size, b, sx, sy, fx, fy)
-                                except:
-                                    continue
-                                arr = np.array(img, dtype=np.uint8).flatten()
-                                rows.append(arr.tolist() + [d])
+    per_symbol = len(fonts) * len(slant_x) * len(slant_y) * len(scale_x) * len(scale_y)
+    for d in digits:
+        done = 0
+        for font in fonts:
+            for sx in slant_x:
+                for sy in slant_y:
+                    for fx in scale_x:
+                        for fy in scale_y:
+                            done += 1
+                            img = make_digit(d, font, sx, sy, fx, fy)
+                            rows.append(img_to_bits(img) + [d])
+                            progress_bar(done, per_symbol, prefix=f"Символ {d}")
     random.shuffle(rows)
-    with open(out_csv, "w", newline="") as f:
+    with open(filename, "w", newline="") as f:
         writer = csv.writer(f)
-        header = [f"p{i}" for i in range(size * size)] + ["label"]
+        header = [f"p{i}" for i in range(400)] + ["label"]
         writer.writerow(header)
         writer.writerows(rows)
+    print("\rГотово.")
 
 if __name__ == "__main__":
-    with open("fonts.json") as f:
-        fonts = json.load(f)["fonts"]
+    NUMS = "1234567890"
+
+    ENG_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    ENG_LOWER = "abcdefghijklmnopqrstuvwxyz"
+
+    RUS_UPPER = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
+    RUS_LOWER = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+
+    ALPHABET = NUMS + ENG_UPPER + ENG_LOWER + RUS_UPPER + RUS_LOWER
+
+    fonts = [os.path.join(os.path.dirname(__file__), "fonts", font) for font in os.listdir("fonts") if not font.startswith(".")]
+
     build_dataset(fonts, "dataset.csv",
-                  size=20,
-                  digits="0123456789",
-                  bolds=0,
-                  slant_x=(-12, -6, 0, 6, 12),
-                  slant_y=(-6, 0, 6),
-                  scale_x=(1.0, 1.2),
-                  scale_y=(1.0, 1.3))
+                  NUMS + RUS_UPPER + RUS_LOWER,
+                  None, None, None, None)

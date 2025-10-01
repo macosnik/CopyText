@@ -2,7 +2,6 @@ import os, csv, random
 from collections import defaultdict
 from model import Net
 
-
 def load_dataset(path):
     with open(path, "r") as f:
         reader = csv.reader(f)
@@ -12,12 +11,33 @@ def load_dataset(path):
     y = [row[-1] for row in data]
     return X, y
 
-
 def shuffle_dataset(X, y):
     idx = list(range(len(y)))
     random.shuffle(idx)
     return [X[i] for i in idx], [y[i] for i in idx]
 
+def evaluate(y_true, y_pred, cls):
+    tp = sum(1 for yt, yp in zip(y_true, y_pred) if yt == 1 and yp == 1)
+    tn = sum(1 for yt, yp in zip(y_true, y_pred) if yt == 0 and yp == 0)
+    total_pos = sum(1 for yt in y_true if yt == 1)
+    total_neg = sum(1 for yt in y_true if yt == 0)
+
+    print()
+    print(f"Метка: {cls}")
+    print(f"Положительные верно: {tp}/{total_pos}")
+    print(f"Отрицательные верно: {tn}/{total_neg}")
+    print("="*50)
+
+def sample_negatives(neg_idx, y_raw, k):
+    neg_by_class = defaultdict(list)
+    for i in neg_idx:
+        neg_by_class[y_raw[i]].append(i)
+    per_class = max(1, k // len(neg_by_class))
+    neg_sample = []
+    for idxs in neg_by_class.values():
+        random.shuffle(idxs)
+        neg_sample.extend(idxs[:per_class])
+    return neg_sample[:k]
 
 if __name__ == "__main__":
     X, y_raw = load_dataset("dataset.csv")
@@ -31,50 +51,55 @@ if __name__ == "__main__":
     for i, yi in enumerate(y_raw):
         by_class[yi].append(i)
 
+    stages = [50, 100, 500, 1000]
+
     for cls in classes:
-        base = cls.split("-")[0]
         pos_idx = by_class[cls]
-        neg_idx = [i for i, yi in enumerate(y_raw) if yi.split("-")[0] != base]
-
-        neg_by_class = defaultdict(list)
-        for i in neg_idx:
-            neg_by_class[y_raw[i]].append(i)
-
-        per_class = max(1, 1000 // len(neg_by_class))
-        neg_sample = []
-        for idxs in neg_by_class.values():
-            random.shuffle(idxs)
-            neg_sample.extend(idxs[:per_class])
-
-        idx_stage1 = pos_idx + neg_sample
-        X1 = [X[i] for i in idx_stage1]
-        y1 = [1 if y_raw[i] == cls else 0 for i in idx_stage1]
-        X1, y1 = shuffle_dataset(X1, y1)
+        neg_idx = [i for i, yi in enumerate(y_raw) if yi != cls]
 
         net = Net([len(X[0]), 5, 2])
-        net.train(X1, y1, epochs=1000, lr=0.1)
-        print()
 
-        idx_stage2 = pos_idx + neg_idx
-        X2 = [X[i] for i in idx_stage2]
-        y2 = [1 if y_raw[i] == cls else 0 for i in idx_stage2]
-        X2, y2 = shuffle_dataset(X2, y2)
+        # Этапы 1–4: равномерные выборки
+        for k in stages:
+            neg_sample = sample_negatives(neg_idx, y_raw, k)
+            idx_stage = pos_idx + neg_sample
+            Xs = [X[i] for i in idx_stage]
+            ys = [1 if y_raw[i] == cls else 0 for i in idx_stage]
+            Xs, ys = shuffle_dataset(Xs, ys)
+            net.train(Xs, ys, epochs=1000, lr=0.1)
+            print(f" - {cls}: обучено на {len(Xs)} примерах (отрицательных {k})")
 
-        net.train(X2, y2, epochs=10000, lr=0.05)
+        # Этап 5: 1000 самых трудных отрицательных
+        preds = net.predict([X[i] for i in neg_idx])
+        scored = [(i, (p[1] if isinstance(p, (list, tuple)) else p)) for i, p in zip(neg_idx, preds)]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        hard_neg = [i for i, _ in scored[:1000]]
+        idx_stage = pos_idx + hard_neg
+        Xs = [X[i] for i in idx_stage]
+        ys = [1 if y_raw[i] == cls else 0 for i in idx_stage]
+        Xs, ys = shuffle_dataset(Xs, ys)
+        net.train(Xs, ys, epochs=5000, lr=0.05)
+        print(f" - {cls}: обучено на {len(Xs)} примерах (1000 трудных отрицательных)")
 
+        # Этап 6: все отрицательные
+        idx_stage = pos_idx + neg_idx
+        Xs = [X[i] for i in idx_stage]
+        ys = [1 if y_raw[i] == cls else 0 for i in idx_stage]
+        Xs, ys = shuffle_dataset(Xs, ys)
+        net.train(Xs, ys, epochs=1000, lr=0.01)
+        print(f"{cls}: обучено на {len(Xs)} примерах (все отрицательные)")
+
+        # Сохраняем модель
         path = os.path.join("models", f"model_{cls}.json")
         net.save(path)
 
-        nn = Net.load(path)
-        preds = nn.predict(X2)
-
-        total_pos = sum(1 for v in y2 if v == 1)
-        correct_pos = sum(1 for p, v in zip(preds, y2) if p == 1 and v == 1)
-
-        total_neg = sum(1 for v in y2 if v == 0)
-        correct_neg = sum(1 for p, v in zip(preds, y2) if p == 0 and v == 0)
-
-        print(f"\nВерно для '{cls}':")
-        print(f"  Положительные: {correct_pos}/{total_pos}")
-        print(f"  Ложные (отрицательные): {correct_neg}/{total_neg}\n")
-
+        # Оценка
+        preds = net.predict(X)
+        y_true = [1 if yi == cls else 0 for yi in y_raw]
+        y_pred = []
+        for p in preds:
+            if isinstance(p, (list, tuple)):
+                y_pred.append(1 if p[1] > 0.5 else 0)
+            else:
+                y_pred.append(1 if p > 0.5 else 0)
+        evaluate(y_true, y_pred, cls)
