@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw, ImageFont
 from model import Net
 import os
-
+import numpy as np
 
 def load_and_binarize(path):
     img = Image.open(path).convert("L")
@@ -13,12 +13,10 @@ def load_and_binarize(path):
     ]
     return binary, img
 
-
 def find_objects(binary):
     h, w = len(binary), len(binary[0])
     visited = [[False] * w for _ in range(h)]
     objs, dirs = [], [(-1, 0), (1, 0), (0, -1), (0, 1)]
-
     for y in range(h):
         for x in range(w):
             if binary[y][x] and not visited[y][x]:
@@ -39,55 +37,43 @@ def find_objects(binary):
                 objs.append(pix)
     return objs
 
-
 def preprocess_crop(binary, box):
     x0, y0, x1, y1 = box
     crop = [row[x0:x1 + 1] for row in binary[y0:y1 + 1]]
     w, h = x1 - x0 + 1, y1 - y0 + 1
     img = Image.new("L", (w, h))
     img.putdata([v * 255 for row in crop for v in row])
-    img = img.resize((20, 20), Image.LANCZOS)
+    img = img.resize((28, 28), Image.LANCZOS)
     return [[p / 255 for p in img.getdata()]]
 
+def load_model(path="model.json"):
+    return Net.load(path)
 
-def load_models(path="models"):
-    return {
-        f[6:-5]: Net.load(os.path.join(path, f))
-        for f in os.listdir(path)
-        if f.endswith(".json")
-    }
+def predict_symbol(vec, net, classes):
+    p = net.predict_proba(vec)[0]  # вектор вероятностей
+    idx = int(np.argmax(p))
+    return classes[idx], float(p[idx])
 
-def draw_objects(binary, objs, models, out_path):
+def draw_objects(binary, objs, net, classes, out_path):
     h, w = len(binary), len(binary[0])
     img = Image.new("RGB", (w, h))
     img.putdata([(v * 255, v * 255, v * 255) for row in binary for v in row])
     draw = ImageDraw.Draw(img)
-
-    font = ImageFont.truetype("fonts/Arialroundedmthelvetica.ttf", size=20)
+    font = ImageFont.truetype("fonts/Arial.ttf", size=28)
 
     for obj in objs:
         xs, ys = [p[0] for p in obj], [p[1] for p in obj]
         x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-
         side = max(x1 - x0 + 1, y1 - y0 + 1)
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-
         x0, x1 = int(cx - side / 2), int(cx + side / 2)
         y0, y1 = int(cy - side / 2), int(cy + side / 2)
-
         x0, y0 = max(0, x0), max(0, y0)
         x1, y1 = min(w - 1, x1), min(h - 1, y1)
 
         vec = preprocess_crop(binary, (x0, y0, x1, y1))
-
-        best_label, best_prob = None, 0
-        for lbl, net in models.items():
-            p = net.predict_proba(vec)[0]
-            prob = p[1] if len(p) == 2 else max(p)
-            if prob > best_prob:
-                best_prob, best_label = prob, lbl
-
-        text = f"{best_label}" if best_prob >= 0.96 else "-"
+        label, prob = predict_symbol(vec, net, classes)
+        text = label if prob >= 0.5 else "-"
 
         draw.rectangle([x0, y0, x1, y1], outline="red", width=1)
         draw.text((x0, y0 - 20), text, fill="red", font=font)
@@ -95,33 +81,22 @@ def draw_objects(binary, objs, models, out_path):
     img.save(out_path)
     print(f"Сохранено: {out_path}")
 
-
-def recognize_text(binary, objs, models, line_gap=15, space_gap_factor=1.5):
+def recognize_text(binary, objs, net, classes, line_gap=15, space_gap_factor=1.5):
     symbols = []
     for obj in objs:
         xs, ys = [p[0] for p in obj], [p[1] for p in obj]
         x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-
         side = max(x1 - x0 + 1, y1 - y0 + 1)
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
         x0, x1 = int(cx - side / 2), int(cx + side / 2)
         y0, y1 = int(cy - side / 2), int(cy + side / 2)
 
         vec = preprocess_crop(binary, (x0, y0, x1, y1))
+        label, prob = predict_symbol(vec, net, classes)
+        if prob >= 0.5:
+            symbols.append((label, x0, y0, y1, x1 - x0 + 1))
 
-        best_label, best_prob = None, 0
-        for lbl, net in models.items():
-            p = net.predict_proba(vec)[0]
-            prob = p[1] if len(p) == 2 else max(p)
-            if prob > best_prob:
-                best_prob, best_label = prob, lbl
-
-        if best_label is not None and best_prob >= 0.5:
-            symbols.append((best_label, x0, y0, y1, x1 - x0 + 1))
-
-    # сортировка по y, затем по x
     symbols.sort(key=lambda s: (s[2], s[1]))
-
     lines, current_line = [], []
     last_y = None
     for sym, x, y0, y1, width in symbols:
@@ -130,7 +105,6 @@ def recognize_text(binary, objs, models, line_gap=15, space_gap_factor=1.5):
             current_line.append((x, sym, width))
             last_y = cy if last_y is None else (last_y + cy) // 2
         else:
-            # завершить строку
             current_line.sort(key=lambda s: s[0])
             lines.append(build_line_with_spaces(current_line, space_gap_factor))
             current_line = [(x, sym, width)]
@@ -138,9 +112,7 @@ def recognize_text(binary, objs, models, line_gap=15, space_gap_factor=1.5):
     if current_line:
         current_line.sort(key=lambda s: s[0])
         lines.append(build_line_with_spaces(current_line, space_gap_factor))
-
     return lines
-
 
 def build_line_with_spaces(symbols, space_gap_factor):
     line = ""
@@ -154,17 +126,18 @@ def build_line_with_spaces(symbols, space_gap_factor):
         line += sym
     return line
 
-
-
 if __name__ == "__main__":
-    models = load_models("models")
-    binary, _ = load_and_binarize("test_4.png")
+    # Загружаем одну модель и список классов
+    net = load_model("model.json")
+    # Восстанови список классов в том же порядке, что при обучении
+    classes = list("0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя")
+
+    binary, _ = load_and_binarize("test.png")
     objs = find_objects(binary)
 
-    lines = recognize_text(binary, objs, models)
+    lines = recognize_text(binary, objs, net, classes)
     print("Распознанный текст:")
     for line in lines:
         print(line)
 
-    draw_objects(binary, objs, models, "output.png")
-
+    draw_objects(binary, objs, net, classes, "output.png")

@@ -1,7 +1,7 @@
 import csv
 
 FILE = 'dataset.csv'
-SIZE = 20
+SIZE = 28
 
 def clean(file, thr=0.0):
     with open(file) as f:
