@@ -1,6 +1,5 @@
 from PIL import Image, ImageDraw, ImageFont
 from model import Net
-import os
 import numpy as np
 
 def load_and_binarize(path):
@@ -127,10 +126,8 @@ def build_line_with_spaces(symbols, space_gap_factor):
     return line
 
 if __name__ == "__main__":
-    # Загружаем одну модель и список классов
     net = load_model("model.json")
-    # Восстанови список классов в том же порядке, что при обучении
-    classes = list("0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя")
+    classes = net.classes
 
     binary, _ = load_and_binarize("test.png")
     objs = find_objects(binary)
@@ -141,3 +138,4 @@ if __name__ == "__main__":
         print(line)
 
     draw_objects(binary, objs, net, classes, "output.png")
+

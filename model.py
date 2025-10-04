@@ -16,8 +16,10 @@ def loss(y, p):
     return -np.log(p[np.arange(len(y)), y]).mean()
 
 class Net:
-    def __init__(self, layers):
+    def __init__(self, layers, dropout=0.0, classes=None):
         self.layers = layers
+        self.dropout = dropout
+        self.classes = classes if classes is not None else []
         self.weights = [
             np.random.randn(layers[i], layers[i + 1]) / np.sqrt(layers[i])
             for i in range(len(layers) - 1)
@@ -27,21 +29,28 @@ class Net:
             for i in range(len(layers) - 1)
         ]
 
-    def forward(self, x):
+    def forward(self, x, training=False):
         x = np.array(x, float)
-        a, acts, zs = x, [x], []
+        a, acts, zs, masks = x, [x], [], []
         for w, b in zip(self.weights[:-1], self.biases[:-1]):
             z = a @ w + b
             a = relu(z)
+            if training and self.dropout > 0:
+                mask = (np.random.rand(*a.shape) > self.dropout).astype(float)
+                a *= mask
+                a /= (1.0 - self.dropout)
+                masks.append(mask)
+            else:
+                masks.append(np.ones_like(a))
             zs.append(z)
             acts.append(a)
         z = a @ self.weights[-1] + self.biases[-1]
         a = softmax(z)
         zs.append(z)
         acts.append(a)
-        return acts, zs
+        return acts, zs, masks
 
-    def backward(self, acts, zs, y):
+    def backward(self, acts, zs, y, masks):
         y = np.array(y, dtype=int)
         m = len(y)
         y_onehot = np.zeros_like(acts[-1])
@@ -53,6 +62,7 @@ class Net:
             gb.insert(0, dz.mean(axis=0, keepdims=True))
             if i > 0:
                 dz = (dz @ self.weights[i].T) * relu_deriv(zs[i - 1])
+                dz *= masks[i-1] / (1.0 - self.dropout)
         return gw, gb
 
     def update(self, gw, gb, lr):
@@ -64,34 +74,37 @@ class Net:
         x = np.array(x, float)
         y = np.array(y, int)
         for e in range(1, epochs + 1):
-            acts, zs = self.forward(x)
+            acts, zs, masks = self.forward(x, training=True)
             l = loss(y, acts[-1])
-            gw, gb = self.backward(acts, zs, y)
+            gw, gb = self.backward(acts, zs, y, masks)
             self.update(gw, gb, lr)
             print(f"\rEpoch {e}/{epochs} - Loss: {l:.3g}", end="")
 
     def predict(self, x):
         x = np.array(x, float)
-        return self.forward(x)[0][-1].argmax(axis=1)
+        return self.forward(x, training=False)[0][-1].argmax(axis=1)
 
     def predict_proba(self, x):
         x = np.array(x, float)
-        return self.forward(x)[0][-1]
+        return self.forward(x, training=False)[0][-1]
 
     def save(self, path):
         data = {
             "layers": self.layers,
+            "dropout": self.dropout,
             "weights": [w.tolist() for w in self.weights],
             "biases": [b.tolist() for b in self.biases],
+            "classes": self.classes,
         }
-        with open(path, "w") as f:
-            json.dump(data, f)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
 
     @classmethod
     def load(cls, path):
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        net = cls(data["layers"])
+        net = cls(data["layers"], dropout=data.get("dropout", 0.0),
+                  classes=data.get("classes", []))
         net.weights = [np.array(w) for w in data["weights"]]
         net.biases = [np.array(b) for b in data["biases"]]
         return net
